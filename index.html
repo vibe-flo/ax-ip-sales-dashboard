@@ -16695,7 +16695,8 @@
   const apiUpdate=(id,data)=>apiPost({action:'update',id,data});
   const apiDelete=id=>apiPost({action:'delete',id});
 
-  let state=load();
+  let state=loadLocal();
+  state.meetings=[]; state.meetingsStatus='loading'; state.meetingsError='';
   let page=0, orgFilter='all', statFilter='won', calMonth='', q='', weekView='list', dealFilter='all', entFilter='all', calSel='';
   const isMobile=()=>window.matchMedia('(max-width:640px)').matches;
   const entClass=e=>({'법인':'e-corp','개인':'e-indiv','개인사업자':'e-sole','해외':'e-intl'}[e]||'e-indiv');
@@ -16722,8 +16723,59 @@
     ]; }
   function seedState(){ const ms=SEED_M.map((m,i)=>{ const o=Object.assign({id:'s'+(i+1),org:'드림어스'},m); if(SMAP[o.status]) o.status=SMAP[o.status]; if(o.div==='360사업팀') o.div='IP전략팀'; o.week=weekOf(o.week)||o.week; return o; }); const wk=ms.map(m=>m.week).filter(Boolean).sort();
     return { meetings:ms, clients:seedClients(), week: wk.length?wk[wk.length-1]:'', baseDate:new Date().toISOString().slice(0,10) }; }
-  function load(){ try{ const s=localStorage.getItem(LS); if(s){ const st=JSON.parse(s); const artmap={'소속사 F':'유주','소속사 D':'채원','소속사 A':'윤슬'}; (st.clients||[]).forEach(c=>{ if(SMAP[c.stage]) c.stage=SMAP[c.stage]; if(c.entity==='해외') c.entity='법인'; if(!c.artist&&artmap[c.name]) c.artist=artmap[c.name]; }); (st.meetings||[]).forEach(m=>{ if(SMAP[m.status]) m.status=SMAP[m.status]; if(m.div==='360사업팀') m.div='IP전략팀'; m.week=weekOf(m.week)||m.week; }); st.week=weekOf(st.week)||st.week; return st; } }catch(e){} return seedState(); }
-  function save(){ try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
+  function loadLocal(){
+    try{
+      const s=localStorage.getItem(LS);
+      if(s){
+        const st=JSON.parse(s);
+        const artmap={'소속사 F':'유주','소속사 D':'채원','소속사 A':'윤슬'};
+        (st.clients||[]).forEach(c=>{ if(SMAP[c.stage]) c.stage=SMAP[c.stage]; if(c.entity==='해외') c.entity='법인'; if(!c.artist&&artmap[c.name]) c.artist=artmap[c.name]; });
+        return { clients: st.clients||seedClients(), week: weekOf(st.week)||st.week||'', baseDate: st.baseDate||new Date().toISOString().slice(0,10) };
+      }
+    }catch(e){}
+    return { clients: seedClients(), week: '', baseDate: new Date().toISOString().slice(0,10) };
+  }
+  function save(){ try{ localStorage.setItem(LS,JSON.stringify({clients:state.clients, week:state.week, baseDate:state.baseDate})); }catch(e){} }
+  function normalizeMeeting(m){
+    const o=Object.assign({},m);
+    o.org='드림어스';
+    if(SMAP[o.status]) o.status=SMAP[o.status];
+    if(o.div==='360사업팀') o.div='IP전략팀';
+    o.mdate=o.mdateISO?ymd2(o.mdateISO):(o.mdate||'미정');
+    o.week=weekOf(o.mdateISO)||weekOf(o.week)||'';
+    return o;
+  }
+  function ensureApiBanner(){
+    let el=document.getElementById('apiBanner');
+    if(!el){ el=document.createElement('div'); el.id='apiBanner'; el.style.cssText='position:sticky;top:0;z-index:50;padding:10px 16px;font-size:14px;text-align:center;display:none;'; document.body.insertBefore(el, document.body.firstChild); }
+    return el;
+  }
+  function renderApiBanner(){
+    const el=ensureApiBanner();
+    if(state.meetingsStatus==='loading'){
+      el.style.display='block'; el.style.background='#eef2ff'; el.style.color='#3730a3';
+      el.textContent='미팅 데이터를 불러오는 중...';
+    } else if(state.meetingsStatus==='error'){
+      el.style.display='block'; el.style.background='#fee2e2'; el.style.color='#991b1b';
+      el.innerHTML=`미팅 데이터를 불러오지 못했어요 (${esc(state.meetingsError||'')}) <button type="button" id="apiRetry" style="margin-left:8px;text-decoration:underline;background:none;border:none;color:inherit;cursor:pointer">다시 시도</button>`;
+      const rb=document.getElementById('apiRetry'); if(rb) rb.addEventListener('click', loadMeetingsFromServer);
+    } else {
+      el.style.display='none';
+    }
+  }
+  async function loadMeetingsFromServer(){
+    state.meetingsStatus='loading'; state.meetingsError=''; render();
+    try{
+      const list=await apiList();
+      state.meetings=list.map(normalizeMeeting);
+      const wl=weeks();
+      if(!state.week||!wl.includes(state.week)) state.week=wl.length?wl[wl.length-1]:'';
+      state.meetingsStatus='ready';
+    }catch(err){
+      state.meetingsStatus='error'; state.meetingsError=String(err&&err.message||err);
+    }
+    render();
+  }
   const weeks=()=>[...new Set(state.meetings.map(m=>m.week).filter(Boolean))].sort();
   const matchOrg=m=>orgFilter==='all'||(m.org||'드림어스')===orgFilter;
   const bmsOf=c=>(c.bms&&c.bms.length)?c.bms:(c.bm?[c.bm]:[]);
@@ -16732,7 +16784,7 @@
   const cMatch=c=>!q||`${c.name} ${bmsOf(c).join(' ')} ${c.note}`.toLowerCase().includes(q.toLowerCase());
   const dedupeByClient=list=>{ const by={}; list.forEach(m=>{ const k=m.client; if(!by[k]||(m.week||'')>(by[k].week||'')) by[k]=m; }); return Object.values(by); };
 
-  function render(){ renderChips(); renderWeek(); renderStatus(); renderCoverage(); if(!calMonth) calMonth=(state.week||'2026-07').slice(0,7); renderCal(); save(); }
+  function render(){ renderApiBanner(); renderChips(); renderWeek(); renderStatus(); renderCoverage(); if(!calMonth) calMonth=(state.week||'2026-07').slice(0,7); renderCal(); save(); }
 
   function renderChips(){ $('#divchips').innerHTML=`<button class="chip${orgFilter==='all'?' active':''}" data-act="orgf" data-org="all">전체</button>`+ORGS.map(o=>`<button class="chip${orgFilter===o?' active':''}" data-act="orgf" data-org="${o}">${o}</button>`).join(''); }
 
@@ -16970,5 +17022,6 @@
   document.addEventListener('keydown',e=>{ if(!modal.hidden){ if(e.key==='Escape') closeModal(); return; } const tag=(e.target.tagName||'').toLowerCase(); if(['input','textarea','select'].includes(tag)) return; if(e.key==='ArrowLeft') showPage(page-1); else if(e.key==='ArrowRight') showPage(page+1); });
 
   render();
+  loadMeetingsFromServer();
 })();
 </script>
