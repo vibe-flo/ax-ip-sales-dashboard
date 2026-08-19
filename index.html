@@ -16912,20 +16912,18 @@
   function closeModal(){ modal.hidden=true; mBody.innerHTML=''; }
   const opts=(arr,cur)=>arr.map(o=>`<option${o===cur?' selected':''}>${esc(o)}</option>`).join('');
 
-  function syncDivField(){ var os=document.getElementById('orgsel'); if(!os) return; var dream=os.value==='드림어스', df=document.getElementById('divfield'), or=document.getElementById('orgrow'); if(df) df.style.display=dream?'':'none'; if(or) or.classList.toggle('solo',!dream); }
-  function mForm(m){ m=m||{id:'',week:state.week,org:(ORGS.includes(orgFilter)?orgFilter:'드림어스'),div:'팬덤사업부',client:'',artist:'',mdate:'',status:'미팅',log:'',followup:''};
+  function mForm(m){ m=m||{id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:'',artist:'',mdate:'',status:'미팅',log:'',followup:''};
     openModal(m.id?'미팅 수정':'미팅 추가',`<form id="mf" data-id="${m.id}">
       <input type="hidden" name="week" value="${esc(m.week)}">
       <div class="two"><div class="field"><label>미팅일시</label><input type="date" name="mdate" value="${esc(m.mdateISO||'')}"${(!m.mdateISO&&m.mdate)?' disabled':''}></div>
       <div class="field"><label>컨택상황</label><select name="status">${opts(MSTATUS,m.status)}</select></div></div>
       <div class="field"><label class="check"><input type="checkbox" name="tbd" ${(!m.mdateISO&&m.mdate)?'checked':''}> 일정 미정 (날짜는 나중에)</label></div>
-      <div class="two" id="orgrow"><div class="field"><label>주체</label><select name="org" id="orgsel">${opts(ORGS,m.org)}</select></div>
-      <div class="field" id="divfield"><label>사업부</label><select name="div">${opts(DIVS,m.div)}</select></div></div>
+      <div class="field"><label>사업부</label><select name="div">${opts(DIVS,m.div)}</select></div>
       <div class="two"><div class="field"><label>기획사</label><input type="text" name="client" value="${esc(m.client)}" placeholder="예) SM엔터테인먼트" required></div>
       <div class="field"><label>아티스트</label><input type="text" name="artist" value="${esc(m.artist)}" placeholder="예) 온유 / ALL"></div></div>
       <div class="field"><label>주요 미팅 내역</label><textarea name="log">${esc(m.log)}</textarea></div>
       <div class="field"><label>후속계획</label><textarea name="followup">${esc(m.followup)}</textarea></div>
-      <div class="modal-foot">${m.id?`<button type="button" class="btn" data-act="del-m" data-id="${m.id}" style="margin-right:auto">삭제</button>`:''}<button type="button" class="btn" data-act="close">취소</button><button type="submit" class="btn primary">저장</button></div></form>`); syncDivField(); }
+      <div class="modal-foot">${m.id?`<button type="button" class="btn" data-act="del-m" data-id="${m.id}" style="margin-right:auto">삭제</button>`:''}<button type="button" class="btn" data-act="close">취소</button><button type="submit" class="btn primary">저장</button></div></form>`); }
 
   function cForm(c){ c=c||{id:'',name:'',artist:'',bm:'음원/반',stage:'미팅',contacted:false,contactDate:'',signDate:'',expireDate:'',size:'',isTarget:true,priority:'',note:''};
     const _ms=c.id?state.meetings.filter(m=>sameClient(m.client,c.name)).sort((a,b)=>(b.week||'').localeCompare(a.week||'')||(b.mdateISO||'').localeCompare(a.mdateISO||'')):[];
@@ -16982,15 +16980,33 @@
   }
 
   document.addEventListener('submit',e=>{
-    if(e.target.id==='mf'){ e.preventDefault(); const f=e.target,id=f.dataset.id,o={id:id||uid()}; ['week','org','div','client','artist','status','log','followup'].forEach(k=>o[k]=f[k].value.trim()); if(o.org!=='드림어스') o.div='';
+    if(e.target.id==='mf'){
+      e.preventDefault();
+      const f=e.target, id=f.dataset.id;
+      const o={ id, org:'드림어스' };
+      ['div','client','artist','status','log','followup'].forEach(k=>o[k]=f[k].value.trim());
       const tbd=f.tbd&&f.tbd.checked, dv=(f.mdate.value||'').trim();
       if(tbd||!dv){ o.mdateISO=''; o.mdate='미정'; } else { o.mdateISO=dv; o.mdate=ymd2(dv); }
-      o.week=weekOf(o.mdateISO)||weekOf(o.week)||weekOf(new Date().toISOString().slice(0,10));
-      const i=state.meetings.findIndex(x=>x.id===id); if(i>=0) state.meetings[i]=o; else state.meetings.push(o); if(o.week) state.week=o.week; closeModal(); render(); showToast('저장되었습니다'); }
+      o.week=weekOf(o.mdateISO)||weekOf(f.week.value.trim())||weekOf(new Date().toISOString().slice(0,10));
+      const payload={ div:o.div, client:o.client, artist:o.artist, mdateISO:o.mdateISO, status:o.status, log:o.log, followup:o.followup };
+      const btn=f.querySelector('button[type=submit]'); if(btn){ btn.disabled=true; btn.textContent='저장 중...'; }
+      const req=id?apiUpdate(id,payload):apiCreate(payload);
+      req.then(res=>{
+        const saved=normalizeMeeting(res.meeting);
+        const i=state.meetings.findIndex(x=>x.id===saved.id);
+        if(i>=0) state.meetings[i]=saved; else state.meetings.push(saved);
+        if(saved.week) state.week=saved.week;
+        closeModal(); render(); showToast('저장되었습니다');
+      }).catch(err=>{
+        if(btn){ btn.disabled=false; btn.textContent='저장'; }
+        showToast('저장 실패: '+(err&&err.message||err));
+        if(err&&err.message==='not_found'){ closeModal(); loadMeetingsFromServer(); }
+      });
+    }
     if(e.target.id==='cf'){ e.preventDefault(); const f=e.target,id=f.dataset.id; const idx=state.clients.findIndex(x=>x.id===id); const o=Object.assign({}, idx>=0?state.clients[idx]:{}, {id:id||uid()}); ['name','artist','stage','size','fee','contactDate','signDate','expireDate','priority','note'].forEach(k=>o[k]=f[k].value.trim()); o.bms=[...f.querySelectorAll('[name=bms]:checked')].map(x=>x.value); o.bm=o.bms[0]||''; if(o.contacted===undefined) o.contacted=true; if(o.isTarget===undefined) o.isTarget=true;
       if(idx>=0) state.clients[idx]=o; else state.clients.push(o); closeModal(); render(); showToast('저장되었습니다'); }
   });
-  document.addEventListener('change',e=>{ if(e.target.id==='orgsel') syncDivField(); if(e.target.name==='tbd'){ const di=e.target.form&&e.target.form.mdate; if(di){ di.disabled=e.target.checked; if(e.target.checked) di.value=''; } } });
+  document.addEventListener('change',e=>{ if(e.target.name==='tbd'){ const di=e.target.form&&e.target.form.mdate; if(di){ di.disabled=e.target.checked; if(e.target.checked) di.value=''; } } });
   let _wasMob=isMobile(); window.addEventListener('resize',()=>{ const m=isMobile(); if(m!==_wasMob){ _wasMob=m; renderCal(); } });
 
   document.addEventListener('click',e=>{ const b=e.target.closest('[data-act]'); if(!b) return; const a=b.dataset.act,id=b.dataset.id;
