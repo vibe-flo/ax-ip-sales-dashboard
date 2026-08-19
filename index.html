@@ -17018,7 +17018,7 @@
     else if(a==='view-c') clientView(state.clients.find(x=>x.id===id));
     else if(a==='hist') showHistory(b.dataset.client);
     else if(a==='add-for') mForm({id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:b.dataset.client,artist:'',mdate:'',status:'2차 미팅',log:'',followup:''});
-    else if(a==='del-m'){ if(b.dataset.armed){ state.meetings=state.meetings.filter(x=>x.id!==id); closeModal(); render(); showToast('미팅을 삭제했어요'); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
+    else if(a==='del-m'){ if(b.dataset.armed){ b.disabled=true; b.textContent='삭제 중...'; apiDelete(id).then(()=>{ state.meetings=state.meetings.filter(x=>x.id!==id); closeModal(); render(); showToast('미팅을 삭제했어요'); }).catch(err=>{ b.disabled=false; b.textContent='한 번 더 누르면 삭제'; showToast('삭제 실패: '+(err&&err.message||err)); if(err&&err.message==='not_found'){ closeModal(); loadMeetingsFromServer(); } }); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
     else if(a==='del-c'){ if(b.dataset.armed){ state.clients=state.clients.filter(x=>x.id!==id); closeModal(); render(); showToast('거래처를 삭제했어요'); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
     else if(a==='orgf'){ orgFilter=b.dataset.org; render(); }
     else if(a==='dealf'){ dealFilter=b.dataset.f; renderStatus(); }
