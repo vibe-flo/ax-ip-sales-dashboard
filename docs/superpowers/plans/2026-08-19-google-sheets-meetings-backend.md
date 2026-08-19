@@ -29,13 +29,14 @@
 
 **Interfaces:**
 - Produces: 배포된 웹앱 URL(`https://script.google.com/macros/s/.../exec` 형태)과 `API_TOKEN` 값 — Task 2에서 `SHEETS_API_URL`/`SHEETS_API_TOKEN`으로 사용.
-- API 계약: `GET ?action=list&token=` → `{ok, meetings:[{id,div,client,artist,mdateISO,cp,status,log}]}`; `POST {token,action:'create'|'update'|'delete', id?, data?}` → `{ok, meeting?}` 또는 `{ok:false, error}`.
+- API 계약: `GET ?action=list&token=` → `{ok, meetings:[{id,div,client,artist,mdateISO,cp,status,log,followup}]}`; `POST {token,action:'create'|'update'|'delete', id?, data?}` → `{ok, meeting?}` 또는 `{ok:false, error}`.
+- **컬럼 매핑 (정정됨)**: A=날짜(week), B=사업부(div), C=기획사(client), D=아티스트(artist), E=미팅일시(mdate), F=C.P(cp), G=컨택상황(status), H=주요미팅내역(log), **I=후속계획(followup, 기존 컬럼)**, **J=id(신규 추가 컬럼)**. id는 반드시 J열이어야 한다 — I열은 이미 사람이 쓰는 후속계획 컬럼이라 절대 덮어쓰면 안 된다.
 
 - [ ] **Step 1: `google-apps-script/Code.gs` 작성**
 
 ```js
 const SHEET_NAME='IP사업부문 영업 현황';
-const COLS={date:1, div:2, client:3, artist:4, mdate:5, cp:6, status:7, log:8, id:9};
+const COLS={date:1, div:2, client:3, artist:4, mdate:5, cp:6, status:7, log:8, followup:9, id:10};
 
 function getSheet_(){
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
@@ -75,8 +76,8 @@ function dateCellToISO_(v){
   return '';
 }
 function rowToMeeting_(sheet,row){
-  const v=sheet.getRange(row,1,1,9).getValues()[0];
-  return { id:String(v[8]||''), div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||'') };
+  const v=sheet.getRange(row,1,1,10).getValues()[0];
+  return { id:String(v[9]||''), div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||''), followup:String(v[8]||'') };
 }
 function findRowById_(sheet,id){
   const last=sheet.getLastRow();
@@ -89,13 +90,13 @@ function listMeetings_(){
   const sheet=getSheet_();
   const last=sheet.getLastRow();
   if(last<2) return [];
-  const values=sheet.getRange(2,1,last-1,9).getValues();
+  const values=sheet.getRange(2,1,last-1,10).getValues();
   const out=[];
   values.forEach((v,i)=>{
     const row=i+2;
-    let id=String(v[8]||'').trim();
+    let id=String(v[9]||'').trim();
     if(!id){ id=Utilities.getUuid(); sheet.getRange(row,COLS.id).setValue(id); }
-    out.push({ id, div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||'') });
+    out.push({ id, div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||''), followup:String(v[8]||'') });
   });
   return out;
 }
@@ -104,7 +105,7 @@ function createMeeting_(data){
   const id=Utilities.getUuid();
   const mdate=toDateObj_(data.mdateISO);
   const week=computeWeekDate_(data.mdateISO);
-  sheet.appendRow([week||'', data.div||'', data.client||'', data.artist||'', mdate||'', data.cp||'', data.status||'', data.log||'', id]);
+  sheet.appendRow([week||'', data.div||'', data.client||'', data.artist||'', mdate||'', data.cp||'', data.status||'', data.log||'', data.followup||'', id]);
   return rowToMeeting_(sheet, sheet.getLastRow());
 }
 function updateMeeting_(id,data){
@@ -117,6 +118,7 @@ function updateMeeting_(id,data){
   if(has('artist')) sheet.getRange(row,COLS.artist).setValue(data.artist||'');
   if(has('status')) sheet.getRange(row,COLS.status).setValue(data.status||'');
   if(has('log')) sheet.getRange(row,COLS.log).setValue(data.log||'');
+  if(has('followup')) sheet.getRange(row,COLS.followup).setValue(data.followup||'');
   if(has('mdateISO')){
     sheet.getRange(row,COLS.mdate).setValue(toDateObj_(data.mdateISO)||'');
     sheet.getRange(row,COLS.date).setValue(computeWeekDate_(data.mdateISO)||'');
@@ -184,28 +186,33 @@ Apps Script 에디터 좌측 톱니바퀴(프로젝트 설정) → 스크립트 
 
 - [ ] **Step 5: curl로 계약 검증**
 
+**중요**: Apps Script 웹앱 URL은 항상 `script.googleusercontent.com`으로
+302 리다이렉트한다 — `curl`에 반드시 `-L`을 붙여야 실제 JSON 응답을 받는다
+(`-L` 없이 호출하면 빈 응답 또는 로그인 페이지로 보일 수 있어 마치 실패한
+것처럼 오해하기 쉽다).
+
 ```bash
 export URL="<Step 4에서 얻은 웹 앱 URL>"
 export TOKEN="<Step 3에서 설정한 API_TOKEN 값>"
 
 # 1) 목록 조회 — 기존 행들의 id가 자동으로 채워지는지 확인
-curl -s "$URL?action=list&token=$TOKEN" | head -c 500
+curl -sL "$URL?action=list&token=$TOKEN" | head -c 500
 
 # 2) 생성
-curl -s -X POST "$URL" -H "Content-Type: text/plain;charset=utf-8" \
-  -d "{\"token\":\"$TOKEN\",\"action\":\"create\",\"data\":{\"div\":\"팬덤사업부\",\"client\":\"__SMOKE_TEST__\",\"artist\":\"\",\"mdateISO\":\"2026-08-20\",\"status\":\"미팅\",\"log\":\"스모크 테스트\"}}"
+curl -sL -X POST "$URL" -H "Content-Type: text/plain;charset=utf-8" \
+  -d "{\"token\":\"$TOKEN\",\"action\":\"create\",\"data\":{\"div\":\"팬덤사업부\",\"client\":\"__SMOKE_TEST__\",\"artist\":\"\",\"mdateISO\":\"2026-08-20\",\"status\":\"미팅\",\"log\":\"스모크 테스트\",\"followup\":\"\"}}"
 # 응답의 meeting.id 를 기록해 둔다 (예: ID_ABOVE)
 
 # 3) 수정 (log만 부분 업데이트 — 다른 필드는 그대로인지 확인)
-curl -s -X POST "$URL" -H "Content-Type: text/plain;charset=utf-8" \
+curl -sL -X POST "$URL" -H "Content-Type: text/plain;charset=utf-8" \
   -d "{\"token\":\"$TOKEN\",\"action\":\"update\",\"id\":\"ID_ABOVE\",\"data\":{\"log\":\"수정됨\"}}"
 
 # 4) 삭제
-curl -s -X POST "$URL" -H "Content-Type: text/plain;charset=utf-8" \
+curl -sL -X POST "$URL" -H "Content-Type: text/plain;charset=utf-8" \
   -d "{\"token\":\"$TOKEN\",\"action\":\"delete\",\"id\":\"ID_ABOVE\"}"
 ```
 
-Expected: (1) `{"ok":true,"meetings":[...]}` 이고 시트를 열어보면 비어있던 `id` 컬럼(I열)이 채워져 있음. (2) `{"ok":true,"meeting":{"id":"...","client":"__SMOKE_TEST__",...}}` 이고 시트에 새 행이 보임. (3) 시트의 `log`만 "수정됨"으로 바뀌고 다른 컬럼은 그대로. (4) `{"ok":true}` 이고 시트에서 해당 행이 사라짐.
+Expected: (1) `{"ok":true,"meetings":[...]}` 이고 시트를 열어보면 비어있던 `id` 컬럼(J열)이 채워져 있음. **주의**: 이 호출은 GET이지만 self-healing이 모든 빈 `id` 행에 실제로 쓰기를 한다 — 반드시 `id` 컬럼이 J열(진짜 빈 컬럼)을 가리키는 코드로 실행해야 한다. I열(후속계획)을 가리키는 상태로 이 명령을 실행하면 안 된다. (2) `{"ok":true,"meeting":{"id":"...","client":"__SMOKE_TEST__",...}}` 이고 시트에 새 행이 보임. (3) 시트의 `log`만 "수정됨"으로 바뀌고 다른 컬럼은 그대로. (4) `{"ok":true}` 이고 시트에서 해당 행이 사라짐.
 
 - [ ] **Step 6: 커밋**
 
@@ -230,7 +237,7 @@ EOF
 
 **Interfaces:**
 - Consumes: 없음 (Task 1에서 얻은 웹 앱 URL과 토큰 값만 사용)
-- Produces: `apiList(): Promise<Array<{id,div,client,artist,mdateISO,cp,status,log}>>`, `apiCreate(data): Promise<{ok,meeting}>`, `apiUpdate(id,data): Promise<{ok,meeting}>`, `apiDelete(id): Promise<{ok}>` — 모두 실패 시 `Error(message)`로 reject.
+- Produces: `apiList(): Promise<Array<{id,div,client,artist,mdateISO,cp,status,log,followup}>>`, `apiCreate(data): Promise<{ok,meeting}>`, `apiUpdate(id,data): Promise<{ok,meeting}>`, `apiDelete(id): Promise<{ok}>` — 모두 실패 시 `Error(message)`로 reject.
 
 - [ ] **Step 1: 설정 상수와 API 헬퍼 삽입**
 
@@ -517,11 +524,11 @@ EOF
       const tbd=f.tbd&&f.tbd.checked, dv=(f.mdate.value||'').trim();
       if(tbd||!dv){ o.mdateISO=''; o.mdate='미정'; } else { o.mdateISO=dv; o.mdate=ymd2(dv); }
       o.week=weekOf(o.mdateISO)||weekOf(f.week.value.trim())||weekOf(new Date().toISOString().slice(0,10));
-      const payload={ div:o.div, client:o.client, artist:o.artist, mdateISO:o.mdateISO, status:o.status, log:o.log };
+      const payload={ div:o.div, client:o.client, artist:o.artist, mdateISO:o.mdateISO, status:o.status, log:o.log, followup:o.followup };
       const btn=f.querySelector('button[type=submit]'); if(btn){ btn.disabled=true; btn.textContent='저장 중...'; }
       const req=id?apiUpdate(id,payload):apiCreate(payload);
       req.then(res=>{
-        const saved=normalizeMeeting(Object.assign({}, res.meeting, {followup:o.followup}));
+        const saved=normalizeMeeting(res.meeting);
         const i=state.meetings.findIndex(x=>x.id===saved.id);
         if(i>=0) state.meetings[i]=saved; else state.meetings.push(saved);
         if(saved.week) state.week=saved.week;
@@ -534,11 +541,15 @@ EOF
     }
 ```
 
-(`followup`은 사양대로 시트에 보내지 않는다 — 저장 직후 화면에는 남아 보이지만, 새로고침해서 서버에서 다시 불러오면 사라진다. 이는 승인된 동작이다.)
+(`followup`은 I열(후속계획)에 정식으로 매핑되므로 `payload`에 포함해 서버에
+보낸다 — 최초 설계에서는 이 컬럼이 없다고 잘못 판단해 로컬에만 남기도록
+했었으나, Task 1 스모크 테스트로 정정되었다. 저장 응답의 `res.meeting`에는
+이미 서버가 반영한 `followup`이 포함되므로, 로컬 병합 없이 그대로
+`normalizeMeeting`에 넘긴다.)
 
 - [ ] **Step 4: 브라우저에서 확인 (Task 1의 실제 URL/토큰이 채워진 상태 기준)**
 
-앱에서 "+ 미팅 추가"로 새 미팅을 저장 → 저장 중 버튼이 "저장 중..."으로 바뀌었다가 모달이 닫히고 토스트가 뜨는지 확인. 구글 시트를 새로고침해 새 행이 추가되고 `id` 컬럼(I열)이 채워졌는지 확인. 기존 미팅을 수정해 시트의 다른 컬럼(예: C.P를 시트에서 직접 입력해 둔 값)이 그대로 남아있는지 확인.
+앱에서 "+ 미팅 추가"로 새 미팅을 저장 → 저장 중 버튼이 "저장 중..."으로 바뀌었다가 모달이 닫히고 토스트가 뜨는지 확인. 구글 시트를 새로고침해 새 행이 추가되고 `id` 컬럼(J열)이 채워졌는지, 후속계획을 입력했다면 I열에 반영됐는지 확인. 기존 미팅을 수정해 시트의 다른 컬럼(예: C.P를 시트에서 직접 입력해 둔 값)이 그대로 남아있는지 확인.
 
 - [ ] **Step 5: 커밋**
 
@@ -739,7 +750,7 @@ EOF
 
 - [ ] **Step 2: id 백필 확인**
 
-배포 직전까지 `id` 컬럼이 비어 있던 기존 행 하나를 시트에서 골라, 앱을 로드한 뒤 시트를 새로고침해 그 행의 I열(`id`)이 채워졌는지 확인한다.
+배포 직전까지 `id` 컬럼이 비어 있던 기존 행 하나를 시트에서 골라, 앱을 로드한 뒤 시트를 새로고침해 그 행의 J열(`id`)이 채워졌는지 확인한다.
 
 - [ ] **Step 3: CRUD 왕복 확인**
 
