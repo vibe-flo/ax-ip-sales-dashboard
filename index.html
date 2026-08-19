@@ -15732,14 +15732,18 @@
   const SHEETS_API_URL='https://script.google.com/a/macros/dreamus.io/s/AKfycbwuR42ROiFAEXPBgyPfiAopSEHCMojpz7nvPsIJxtfvmFSFFxUvRq6-dtWyPzGag84dqw/exec';
   const SHEETS_API_TOKEN='83f738ec4cb001fa1f652d7ba8561a40f5b6aec22e88591871c76c8db808a1c1';
   async function apiList(){
-    const res=await fetch(`${SHEETS_API_URL}?action=list&token=${encodeURIComponent(SHEETS_API_TOKEN)}`);
-    const j=await res.json();
+    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
+    let res; try{ res=await fetch(`${SHEETS_API_URL}?action=list&token=${encodeURIComponent(SHEETS_API_TOKEN)}`, {signal:ctrl.signal}); } finally { clearTimeout(to); }
+    const t=await res.text();
+    let j; try{ j=JSON.parse(t); }catch(_){ throw new Error('server_error'); }
     if(!j.ok) throw new Error(j.error||'list_failed');
     return j.meetings;
   }
   async function apiPost(body){
-    const res=await fetch(SHEETS_API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(Object.assign({token:SHEETS_API_TOKEN}, body)) });
-    const j=await res.json();
+    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
+    let res; try{ res=await fetch(SHEETS_API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(Object.assign({token:SHEETS_API_TOKEN}, body)), signal:ctrl.signal }); } finally { clearTimeout(to); }
+    const t=await res.text();
+    let j; try{ j=JSON.parse(t); }catch(_){ throw new Error('server_error'); }
     if(!j.ok) throw new Error(j.error||'request_failed');
     return j;
   }
@@ -15792,7 +15796,7 @@
     if(SMAP[o.status]) o.status=SMAP[o.status];
     if(o.div==='360사업팀') o.div='IP전략팀';
     o.mdate=o.mdateISO?ymd2(o.mdateISO):(o.mdate||'미정');
-    o.week=weekOf(o.mdateISO)||weekOf(o.week)||'';
+    o.week=weekOf(o.weekISO)||weekOf(o.mdateISO)||weekOf(o.week)||'';
     return o;
   }
   function ensureApiBanner(){
@@ -15813,7 +15817,10 @@
       el.style.display='none';
     }
   }
+  let meetingsLoadInFlight=false;
   async function loadMeetingsFromServer(){
+    if(meetingsLoadInFlight) return;
+    meetingsLoadInFlight=true;
     state.meetingsStatus='loading'; state.meetingsError=''; render();
     try{
       const list=await apiList();
@@ -15823,6 +15830,8 @@
       state.meetingsStatus='ready';
     }catch(err){
       state.meetingsStatus='error'; state.meetingsError=String(err&&err.message||err);
+    }finally{
+      meetingsLoadInFlight=false;
     }
     render();
   }
@@ -16050,8 +16059,8 @@
         closeModal(); render(); showToast('저장되었습니다');
       }).catch(err=>{
         if(btn){ btn.disabled=false; btn.textContent='저장'; }
-        showToast('저장 실패: '+(err&&err.message||err));
-        if(err&&err.message==='not_found'){ closeModal(); loadMeetingsFromServer(); }
+        if(err&&err.message==='not_found'){ showToast('다른 곳에서 이미 변경된 미팅이에요 — 최신 내용으로 새로고침할게요'); closeModal(); loadMeetingsFromServer(); }
+        else showToast('저장 실패: '+(err&&err.message||err));
       });
     }
     if(e.target.id==='cf'){ e.preventDefault(); const f=e.target,id=f.dataset.id; const idx=state.clients.findIndex(x=>x.id===id); const o=Object.assign({}, idx>=0?state.clients[idx]:{}, {id:id||uid()}); ['name','artist','stage','size','fee','contactDate','signDate','expireDate','priority','note'].forEach(k=>o[k]=f[k].value.trim()); o.bms=[...f.querySelectorAll('[name=bms]:checked')].map(x=>x.value); o.bm=o.bms[0]||''; if(o.contacted===undefined) o.contacted=true; if(o.isTarget===undefined) o.isTarget=true;
@@ -16069,7 +16078,7 @@
     else if(a==='view-c') clientView(state.clients.find(x=>x.id===id));
     else if(a==='hist') showHistory(b.dataset.client);
     else if(a==='add-for') mForm({id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:b.dataset.client,artist:'',mdate:'',status:'2차 미팅',log:'',followup:''});
-    else if(a==='del-m'){ if(b.dataset.armed){ b.disabled=true; b.textContent='삭제 중...'; apiDelete(id).then(()=>{ state.meetings=state.meetings.filter(x=>x.id!==id); closeModal(); render(); showToast('미팅을 삭제했어요'); }).catch(err=>{ b.disabled=false; b.textContent='한 번 더 누르면 삭제'; showToast('삭제 실패: '+(err&&err.message||err)); if(err&&err.message==='not_found'){ closeModal(); loadMeetingsFromServer(); } }); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
+    else if(a==='del-m'){ if(b.dataset.armed){ b.disabled=true; b.textContent='삭제 중...'; apiDelete(id).then(()=>{ state.meetings=state.meetings.filter(x=>x.id!==id); closeModal(); render(); showToast('미팅을 삭제했어요'); }).catch(err=>{ b.disabled=false; b.textContent='한 번 더 누르면 삭제'; if(err&&err.message==='not_found'){ showToast('다른 곳에서 이미 삭제된 미팅이에요'); closeModal(); loadMeetingsFromServer(); } else showToast('삭제 실패: '+(err&&err.message||err)); }); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
     else if(a==='del-c'){ if(b.dataset.armed){ state.clients=state.clients.filter(x=>x.id!==id); closeModal(); render(); showToast('거래처를 삭제했어요'); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
     else if(a==='orgf'){ orgFilter=b.dataset.org; render(); }
     else if(a==='dealf'){ dealFilter=b.dataset.f; renderStatus(); }
@@ -16078,7 +16087,7 @@
     else if(a==='wmore'){ const el=b.previousElementSibling; if(el){ const cl=el.classList.toggle('clamp'); b.textContent=cl?'더보기':'접기'; } }
     else if(a==='today'){ state.baseDate=new Date().toISOString().slice(0,10); render(); }
     else if(a==='copy'){ const t=$('#jbox'); t.select(); try{navigator.clipboard.writeText(t.value);}catch(_){ try{document.execCommand('copy');}catch(__){}} b.textContent='복사됨 ✓'; setTimeout(()=>b.textContent='복사',1400); }
-    else if(a==='load'){ const v=prompt('백업 JSON 붙여넣기:'); if(v){ try{ const p=JSON.parse(v); if(p.clients){ state.clients=p.clients; if(p.week) state.week=p.week; if(p.baseDate) state.baseDate=p.baseDate; closeModal(); render(); } else alert('형식 오류'); }catch(_){ alert('JSON 오류'); } } }
+    else if(a==='load'){ const v=prompt('백업 JSON 붙여넣기:'); if(v){ try{ const p=JSON.parse(v); if(Array.isArray(p.clients)){ state.clients=p.clients; if(p.week) state.week=p.week; if(p.baseDate) state.baseDate=p.baseDate; closeModal(); render(); } else alert('형식 오류'); }catch(_){ alert('JSON 오류'); } } }
   });
 
   document.addEventListener('change',e=>{ if(e.target.id==='weeksel'){ state.week=e.target.value; renderWeek(); save(); } if(e.target.classList.contains('basedate')){ state.baseDate=e.target.value; render(); } });

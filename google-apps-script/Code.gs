@@ -40,7 +40,7 @@ function dateCellToISO_(v){
 }
 function rowToMeeting_(sheet,row){
   const v=sheet.getRange(row,1,1,10).getValues()[0];
-  return { id:String(v[9]||''), div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||''), followup:String(v[8]||'') };
+  return { id:String(v[9]||''), div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||''), followup:String(v[8]||''), weekISO:dateCellToISO_(v[0]) };
 }
 function findRowById_(sheet,id){
   const last=sheet.getLastRow();
@@ -50,26 +50,27 @@ function findRowById_(sheet,id){
   return -1;
 }
 function listMeetings_(){
-  const sheet=getSheet_();
-  const last=sheet.getLastRow();
-  if(last<2) return [];
-  const values=sheet.getRange(2,1,last-1,10).getValues();
-  const out=[];
-  values.forEach((v,i)=>{
-    const row=i+2;
-    let id=String(v[9]||'').trim();
-    if(!id){ id=Utilities.getUuid(); sheet.getRange(row,COLS.id).setValue(id); }
-    out.push({ id, div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||''), followup:String(v[8]||'') });
+  return withLock_(()=>{
+    const sheet=getSheet_();
+    const last=sheet.getLastRow();
+    if(last<2) return [];
+    const values=sheet.getRange(2,1,last-1,10).getValues();
+    const out=[];
+    values.forEach((v,i)=>{
+      const row=i+2;
+      let id=String(v[9]||'').trim();
+      if(!id){ id=Utilities.getUuid(); sheet.getRange(row,COLS.id).setValue(id); }
+      out.push({ id, div:String(v[1]||''), client:String(v[2]||''), artist:String(v[3]||''), mdateISO:dateCellToISO_(v[4]), cp:String(v[5]||''), status:String(v[6]||''), log:String(v[7]||''), followup:String(v[8]||''), weekISO:dateCellToISO_(v[0]) });
+    });
+    return out;
   });
-  return out;
 }
 function createMeeting_(data){
   const sheet=getSheet_();
   const id=Utilities.getUuid();
   const mdate=toDateObj_(data.mdateISO);
-  const week=computeWeekDate_(data.mdateISO);
-  sheet.appendRow([week||'', data.div||'', data.client||'', data.artist||'', mdate||'', data.cp||'', data.status||'', data.log||'', data.followup||'', id]);
-  return rowToMeeting_(sheet, sheet.getLastRow());
+  sheet.appendRow(['', data.div||'', data.client||'', data.artist||'', mdate||'', data.cp||'', data.status||'', data.log||'', data.followup||'', id]);
+  return rowToMeeting_(sheet, findRowById_(sheet, id));
 }
 function updateMeeting_(id,data){
   const sheet=getSheet_();
@@ -82,9 +83,8 @@ function updateMeeting_(id,data){
   if(has('status')) sheet.getRange(row,COLS.status).setValue(data.status||'');
   if(has('log')) sheet.getRange(row,COLS.log).setValue(data.log||'');
   if(has('followup')) sheet.getRange(row,COLS.followup).setValue(data.followup||'');
-  if(has('mdateISO')){
+  if(has('mdateISO') && data.mdateISO){
     sheet.getRange(row,COLS.mdate).setValue(toDateObj_(data.mdateISO)||'');
-    sheet.getRange(row,COLS.date).setValue(computeWeekDate_(data.mdateISO)||'');
   }
   return rowToMeeting_(sheet,row);
 }
