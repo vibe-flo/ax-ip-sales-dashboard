@@ -214,6 +214,20 @@ curl -sL -X POST "$URL" -H "Content-Type: text/plain;charset=utf-8" \
 
 Expected: (1) `{"ok":true,"meetings":[...]}` 이고 시트를 열어보면 비어있던 `id` 컬럼(J열)이 채워져 있음. **주의**: 이 호출은 GET이지만 self-healing이 모든 빈 `id` 행에 실제로 쓰기를 한다 — 반드시 `id` 컬럼이 J열(진짜 빈 컬럼)을 가리키는 코드로 실행해야 한다. I열(후속계획)을 가리키는 상태로 이 명령을 실행하면 안 된다. (2) `{"ok":true,"meeting":{"id":"...","client":"__SMOKE_TEST__",...}}` 이고 시트에 새 행이 보임. (3) 시트의 `log`만 "수정됨"으로 바뀌고 다른 컬럼은 그대로. (4) `{"ok":true}` 이고 시트에서 해당 행이 사라짐.
 
+> **알려진 curl 한계**: 실제로는 `curl -L`이 POST 요청의 302 리다이렉트를 따라갈 때
+> (Apps Script가 실제 응답을 `script.googleusercontent.com/macros/echo?...`로
+> 리다이렉트하는 방식) 응답 바디를 제대로 못 읽어오는 경우가 있었다(405나
+> Google Drive 일반 에러 페이지를 반환) — 그런데 **서버 쪽 실행(시트 쓰기)은
+> 매번 정상적으로 성공**했다(GET으로 다시 조회해서 확인함). 즉 이건 curl의
+> 리다이렉트 처리 한계이지 API 자체의 결함이 아니다. 실제 앱은 브라우저
+> `fetch()`를 쓰는데, 브라우저 콘솔에서 동일한 create/update/delete를
+> `fetch()`로 직접 호출해보니 매번 `redirected:true, status:200`과 함께
+> 정상 JSON을 받았다 — 즉 `index.html`에서 쓰는 방식(브라우저 fetch)은
+> 문제없이 동작한다. curl 스모크 테스트에서 GET(`list`)은 신뢰할 수 있지만,
+> POST(`create`/`update`/`delete`) 결과가 이상하게 나오면 놀라지 말고
+> **GET으로 다시 조회해 실제로 반영됐는지부터 확인**하거나, 브라우저 콘솔에서
+> `fetch()`로 재현해 볼 것.
+
 - [ ] **Step 6: 커밋**
 
 ```bash
