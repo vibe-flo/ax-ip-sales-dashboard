@@ -16960,9 +16960,10 @@
       ${hist}
       <div class="modal-foot" style="margin-top:16px"><button type="button" class="btn" data-act="edit-c" data-id="${c.id}">거래처 정보 수정</button><button type="button" class="btn primary" data-act="close">닫기</button></div>`); }
 
-  function ioForm(){ openModal('백업 · 복원',`<div class="field"><label>현재 데이터(JSON)</label><textarea class="json" id="jbox" readonly>${esc(JSON.stringify(state,null,2))}</textarea></div>
-      <div class="modal-foot" style="margin-top:12px"><button type="button" class="btn" data-act="load">붙여넣기로 복원</button><button type="button" class="btn" data-act="reset">기본값 초기화</button><button type="button" class="btn primary" data-act="copy">복사</button></div>
-      <div class="hintline">데이터는 이 브라우저에 자동 저장됩니다. 백업이 필요하면 JSON을 복사해 보관하세요.</div>`); }
+  function ioForm(){ const backup={clients:state.clients, week:state.week, baseDate:state.baseDate};
+    openModal('백업 · 복원',`<div class="field"><label>현재 데이터(JSON, 거래처만)</label><textarea class="json" id="jbox" readonly>${esc(JSON.stringify(backup,null,2))}</textarea></div>
+      <div class="modal-foot" style="margin-top:12px"><button type="button" class="btn" data-act="load">붙여넣기로 복원</button><button type="button" class="btn primary" data-act="copy">복사</button></div>
+      <div class="hintline">거래처 데이터는 이 브라우저에 자동 저장됩니다. 미팅 데이터는 Google Sheet에서 직접 관리되며 이 백업에는 포함되지 않습니다.</div>`); }
 
   function showHistory(name){
     const items=state.meetings.filter(m=>sameClient(m.client,name)).sort((a,b)=>(b.week||'').localeCompare(a.week||'')||(b.mdateISO||'').localeCompare(a.mdateISO||''));
@@ -17027,8 +17028,7 @@
     else if(a==='wmore'){ const el=b.previousElementSibling; if(el){ const cl=el.classList.toggle('clamp'); b.textContent=cl?'더보기':'접기'; } }
     else if(a==='today'){ state.baseDate=new Date().toISOString().slice(0,10); render(); }
     else if(a==='copy'){ const t=$('#jbox'); t.select(); try{navigator.clipboard.writeText(t.value);}catch(_){ try{document.execCommand('copy');}catch(__){}} b.textContent='복사됨 ✓'; setTimeout(()=>b.textContent='복사',1400); }
-    else if(a==='load'){ const v=prompt('백업 JSON 붙여넣기:'); if(v){ try{ const p=JSON.parse(v); if(p.meetings&&p.clients){ state=p; closeModal(); render(); } else alert('형식 오류'); }catch(_){ alert('JSON 오류'); } } }
-    else if(a==='reset'){ if(b.dataset.armed){ localStorage.removeItem(LS); state=seedState(); statFilter='won'; orgFilter='all'; calMonth=''; closeModal(); render(); showToast('기본값으로 초기화했어요'); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 초기화'; b.classList.add('danger'); } }
+    else if(a==='load'){ const v=prompt('백업 JSON 붙여넣기:'); if(v){ try{ const p=JSON.parse(v); if(p.clients){ state.clients=p.clients; if(p.week) state.week=p.week; if(p.baseDate) state.baseDate=p.baseDate; closeModal(); render(); } else alert('형식 오류'); }catch(_){ alert('JSON 오류'); } } }
   });
 
   document.addEventListener('change',e=>{ if(e.target.id==='weeksel'){ state.week=e.target.value; renderWeek(); save(); } if(e.target.classList.contains('basedate')){ state.baseDate=e.target.value; render(); } });
