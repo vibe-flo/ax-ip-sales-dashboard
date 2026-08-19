@@ -39,7 +39,7 @@ GET/CREATE/UPDATE/DELETE가 모두 그 시트에 반영되도록 한다.
 
 ## 시트 컬럼 매핑
 
-`IP사업부문 영업 현황` 탭, 현재 컬럼 A~H:
+`IP사업부문 영업 현황` 탭, 현재 컬럼 A~I:
 
 | 컬럼 | 헤더 | 앱 필드 |
 |---|---|---|
@@ -51,16 +51,21 @@ GET/CREATE/UPDATE/DELETE가 모두 그 시트에 반영되도록 한다.
 | F | C.P | `cp` (담당자 — 신규 필드, UI에 없어도 라운드트립 시 보존) |
 | G | 컨택상황 | `status` |
 | H | 주요 미팅내역 | `log` |
-| I *(신규 추가)* | id | `id` |
+| I | 후속계획 | `followup` |
+| J *(신규 추가)* | id | `id` |
 
-`followup`(후속조치)에 대응하는 시트 컬럼이 없다 — 이번 연동에서는
-`followup` 필드를 시트에 반영하지 않는다(UI에 남아있어도 저장 대상에서
-제외, 또는 `log`에 이어붙이지 않고 그대로 둔다는 뜻). 별도 컬럼이 필요해지면
-후속 작업으로 컬럼 J를 추가한다.
+> **정정 이력**: 최초 설계에서는 I열을 빈 컬럼으로 착각해 `id`를 I열에
+> 배치하고, "시트에 `followup` 대응 컬럼이 없다"고 잘못 기술했었다. 실제로는
+> I열이 이미 "후속계획"(=`followup`) 컬럼으로 쓰이고 있었다. Task 1 구현 후
+> 첫 `list` 스모크 테스트에서 이 사실이 드러났고(빈 후속계획 셀 52건에
+> self-healing 로직이 실수로 UUID를 써넣음 — 사용자가 수동으로 원상복구,
+> 기존 텍스트가 있던 35건은 self-healing이 건드리지 않아 데이터 손실 없음),
+> `id`를 J열(진짜 빈 컬럼)로 옮기고 `followup`을 I열에 정식 매핑하도록
+> 바로잡았다. 이 표는 정정된 최종 매핑이다.
 
 ## ID 전략
 
-- 시트 맨 뒤에 새 컬럼 `I: id`를 추가한다. 기존 A~H 컬럼 순서/서식은 건드리지
+- 시트 맨 뒤에 새 컬럼 `J: id`를 추가한다. 기존 A~I 컬럼 순서/서식은 건드리지
   않아 수기로 편집하는 다른 사용자에게 영향이 없다.
 - **Self-healing 백필**: `GET action=list` 처리 중 `id`가 빈 행을 만나면
   서버가 그 자리에서 고유 id를 생성해 셀에 써넣고 응답에도 포함한다. 별도
@@ -76,8 +81,8 @@ Apps Script 웹앱은 `doGet`/`doPost` 두 진입점만 제공하므로, 모든 
 POST로 보내고 `action` 필드로 의미를 구분한다.
 
 - `GET ?action=list&token=...`
-  → `{ ok:true, meetings:[{id, div, client, artist, mdateISO, cp, status, log}, ...] }`
-- `POST { action:"create", token, data:{div, client, artist, mdateISO, cp, status, log} }`
+  → `{ ok:true, meetings:[{id, div, client, artist, mdateISO, cp, status, log, followup}, ...] }`
+- `POST { action:"create", token, data:{div, client, artist, mdateISO, cp, status, log, followup} }`
   → 새 행을 시트 맨 아래 추가, 생성된 `id` 포함해 반환
 - `POST { action:"update", token, id, data:{...변경할 필드만...} }`
   → id로 행 검색 후 **전달된 필드만 부분 업데이트**. 예: `log`만 보내면 다른
