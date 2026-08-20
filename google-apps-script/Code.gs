@@ -1,6 +1,24 @@
 const SHEET_NAME='IP사업부문 영업 현황';
 const COLS={date:1, div:2, client:3, artist:4, mdate:5, cp:6, status:7, log:8, followup:9, id:10};
 
+// Google Sign-In(GIS) OAuth 클라이언트 ID — index.html의 GOOGLE_CLIENT_ID와 동일해야 함.
+const GOOGLE_CLIENT_ID='331750263105-khe113rrlgrfr0tmfm9ik9un8gib7nd6.apps.googleusercontent.com';
+// IP영업팀 접근 허용 이메일. 인원 변경 시 이 목록만 수정.
+const ALLOWED_EMAILS=new Set([
+  'kiyounglee@dreamus.io',
+  'funkynation@dreamus.io',
+  'gy.kim@dreamus.io',
+  'sungkyoum.kim@dreamus.io',
+  'yewon.park@dreamus.io',
+  'eunju1106@dreamus.io',
+  'dj.min@dreamus.io',
+  'hyunz@dreamus.io',
+  'hyunjoo.byun@dreamus.io',
+  'yr.park@dreamus.io',
+  'jennifer@dreamus.io',
+  'alex.hwang@dreamus.io',
+]);
+
 function getSheet_(){
   return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
 }
@@ -10,6 +28,24 @@ function getToken_(){
 function checkToken_(token){
   const expected=getToken_();
   return !!expected && token===expected;
+}
+// Google ID 토큰(idToken)을 Google의 tokeninfo 엔드포인트로 검증하고, 화이트리스트 이메일인지 확인.
+function verifyIdentity_(idToken){
+  if(!idToken) return {ok:false, code:'unauthenticated'};
+  let resp;
+  try{
+    resp=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(idToken), {muteHttpExceptions:true});
+  }catch(err){
+    return {ok:false, code:'unauthenticated'};
+  }
+  if(resp.getResponseCode()!==200) return {ok:false, code:'unauthenticated'};
+  let info;
+  try{ info=JSON.parse(resp.getContentText()); }catch(err){ return {ok:false, code:'unauthenticated'}; }
+  if(info.aud!==GOOGLE_CLIENT_ID) return {ok:false, code:'unauthenticated'};
+  if(info.email_verified!=='true' && info.email_verified!==true) return {ok:false, code:'unauthenticated'};
+  const email=String(info.email||'').trim().toLowerCase();
+  if(!ALLOWED_EMAILS.has(email)) return {ok:false, code:'forbidden', email};
+  return {ok:true, email};
 }
 function jsonOut_(obj){
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -99,6 +135,8 @@ function deleteMeeting_(id){
 function doGet(e){
   const token=e.parameter.token;
   if(!checkToken_(token)) return jsonOut_({ok:false,error:'unauthorized'});
+  const auth=verifyIdentity_(e.parameter.idToken);
+  if(!auth.ok) return jsonOut_({ok:false, error:auth.code});
   if(e.parameter.action==='list'){
     try{ return jsonOut_({ok:true, meetings:listMeetings_()}); }
     catch(err){ return jsonOut_({ok:false, error:String(err)}); }
@@ -109,6 +147,8 @@ function doPost(e){
   let body;
   try{ body=JSON.parse(e.postData.contents); }catch(err){ return jsonOut_({ok:false,error:'bad_json'}); }
   if(!checkToken_(body.token)) return jsonOut_({ok:false,error:'unauthorized'});
+  const auth=verifyIdentity_(body.idToken);
+  if(!auth.ok) return jsonOut_({ok:false, error:auth.code});
   try{
     if(body.action==='create') return jsonOut_({ok:true, meeting:withLock_(()=>createMeeting_(body.data||{}))});
     if(body.action==='update'){

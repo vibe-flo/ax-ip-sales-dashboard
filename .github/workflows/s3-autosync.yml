@@ -1,0 +1,26 @@
+name: S3 AutoSync
+# AWS 외부망 배포 — flo-vibe 버킷 + vibe.music-flo.com 게이트웨이.
+# 순수 정적 index.html 1개 파일이라 npm 빌드 없이 그대로 S3에 올린다.
+on:
+  push:
+    branches:
+      - main # → prod 배포 (s3://flo-vibe/prod/)
+      - qa   # → qa 배포 (s3://flo-vibe/qa/)
+  # 수동 실행 가능
+  workflow_dispatch:
+jobs:
+  s3-sync:
+    # Cloud팀 self-hosted 러너 라벨 (2026-06-02 Node.js 24 전환으로 cloud → cloud-up)
+    runs-on: [self-hosted, cloud-up]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Sync to S3
+        run: |
+          if [ "${{ github.ref_name }}" = "qa" ]; then
+            DEPLOY_ENV=qa
+          else
+            DEPLOY_ENV=prod
+          fi
+          echo "Deploying to s3://flo-vibe/$DEPLOY_ENV/${{ github.event.repository.name }}/"
+          aws s3 cp ./index.html "s3://flo-vibe/$DEPLOY_ENV/${{ github.event.repository.name }}/index.html"
