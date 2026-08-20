@@ -80,6 +80,7 @@ function updateMeeting_(id,data){
   if(has('div')) sheet.getRange(row,COLS.div).setValue(data.div||'');
   if(has('client')) sheet.getRange(row,COLS.client).setValue(data.client||'');
   if(has('artist')) sheet.getRange(row,COLS.artist).setValue(data.artist||'');
+  if(has('cp')) sheet.getRange(row,COLS.cp).setValue(data.cp||'');
   if(has('status')) sheet.getRange(row,COLS.status).setValue(data.status||'');
   if(has('log')) sheet.getRange(row,COLS.log).setValue(data.log||'');
   if(has('followup')) sheet.getRange(row,COLS.followup).setValue(data.followup||'');

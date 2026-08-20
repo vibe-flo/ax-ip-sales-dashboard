@@ -15972,13 +15972,14 @@
   function closeModal(){ modal.hidden=true; mBody.innerHTML=''; }
   const opts=(arr,cur)=>arr.map(o=>`<option${o===cur?' selected':''}>${esc(o)}</option>`).join('');
 
-  function mForm(m){ m=m||{id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:'',artist:'',mdate:'',status:'제안',log:'',followup:''};
+  function mForm(m){ m=m||{id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:'',artist:'',mdate:'',status:'제안',log:'',followup:'',cp:''};
     openModal(m.id?'미팅 수정':'미팅 추가',`<form id="mf" data-id="${m.id}">
       <input type="hidden" name="week" value="${esc(m.week)}">
       <div class="two"><div class="field"><label>미팅일시</label><input type="date" name="mdate" value="${esc(m.mdateISO||'')}"${(!m.mdateISO&&m.mdate)?' disabled':''}></div>
       <div class="field"><label>컨택상황</label><select name="status">${opts(MSTATUS,m.status)}</select></div></div>
       <div class="field"><label class="check"><input type="checkbox" name="tbd" ${(!m.mdateISO&&m.mdate)?'checked':''}> 일정 미정 (날짜는 나중에)</label></div>
-      <div class="field"><label>사업부</label><select name="div">${opts(DIVS,m.div)}</select></div>
+      <div class="two"><div class="field"><label>사업부</label><select name="div">${opts(DIVS,m.div)}</select></div>
+      <div class="field"><label>담당자 (C.P)</label><input type="text" name="cp" value="${esc(m.cp||'')}" placeholder="예) 김나래 대표"></div></div>
       <div class="two"><div class="field"><label>기획사</label><input type="text" name="client" value="${esc(m.client)}" placeholder="예) SM엔터테인먼트" required></div>
       <div class="field"><label>아티스트</label><input type="text" name="artist" value="${esc(m.artist)}" placeholder="예) 온유 / ALL"></div></div>
       <div class="field"><label>주요 미팅 내역</label><textarea name="log">${esc(m.log)}</textarea></div>
@@ -16045,11 +16046,11 @@
       e.preventDefault();
       const f=e.target, id=f.dataset.id;
       const o={ id, org:'드림어스' };
-      ['div','client','artist','status','log','followup'].forEach(k=>o[k]=f[k].value.trim());
+      ['div','client','artist','status','log','followup','cp'].forEach(k=>o[k]=f[k].value.trim());
       const tbd=f.tbd&&f.tbd.checked, dv=(f.mdate.value||'').trim();
       if(tbd||!dv){ o.mdateISO=''; o.mdate='미정'; } else { o.mdateISO=dv; o.mdate=ymd2(dv); }
       o.week=weekOf(o.mdateISO)||weekOf(f.week.value.trim())||weekOf(new Date().toISOString().slice(0,10));
-      const payload={ div:o.div, client:o.client, artist:o.artist, mdateISO:o.mdateISO, status:o.status, log:o.log, followup:o.followup };
+      const payload={ div:o.div, client:o.client, artist:o.artist, mdateISO:o.mdateISO, status:o.status, log:o.log, followup:o.followup, cp:o.cp };
       const btn=f.querySelector('button[type=submit]'); if(btn){ btn.disabled=true; btn.textContent='저장 중...'; }
       const req=id?apiUpdate(id,payload):apiCreate(payload);
       req.then(res=>{
@@ -16073,12 +16074,12 @@
   document.addEventListener('click',e=>{ const b=e.target.closest('[data-act]'); if(!b) return; const a=b.dataset.act,id=b.dataset.id;
     if(a==='add-m') mForm(); else if(a==='add-c') cForm(); else if(a==='io') ioForm(); else if(a==='close') closeModal();
     else if(a==='prev') showPage(page-1); else if(a==='next') showPage(page+1); else if(a==='cprev') shiftMonth(-1); else if(a==='cnext') shiftMonth(1);
-    else if(a==='cal-add'){ const iso=b.dataset.date; mForm({id:'',week:iso,org:'드림어스',div:'팬덤사업부',client:'',artist:'',mdate:ymd2(iso),mdateISO:iso,status:'제안',log:'',followup:''}); }
+    else if(a==='cal-add'){ const iso=b.dataset.date; mForm({id:'',week:iso,org:'드림어스',div:'팬덤사업부',client:'',artist:'',mdate:ymd2(iso),mdateISO:iso,status:'제안',log:'',followup:'',cp:''}); }
     else if(a==='cal-sel'){ calSel=b.dataset.date; renderCal(); }
     else if(a==='edit-m') mForm(state.meetings.find(x=>x.id===id)); else if(a==='edit-c') cForm(state.clients.find(x=>x.id===id));
     else if(a==='view-c') clientView(state.clients.find(x=>x.id===id));
     else if(a==='hist') showHistory(b.dataset.client);
-    else if(a==='add-for') mForm({id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:b.dataset.client,artist:'',mdate:'',status:'2차 미팅',log:'',followup:''});
+    else if(a==='add-for') mForm({id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:b.dataset.client,artist:'',mdate:'',status:'2차 미팅',log:'',followup:'',cp:''});
     else if(a==='del-m'){ if(b.dataset.armed){ b.disabled=true; b.textContent='삭제 중...'; apiDelete(id).then(()=>{ state.meetings=state.meetings.filter(x=>x.id!==id); closeModal(); render(); showToast('미팅을 삭제했어요'); }).catch(err=>{ b.disabled=false; b.textContent='한 번 더 누르면 삭제'; if(err&&err.message==='not_found'){ showToast('다른 곳에서 이미 삭제된 미팅이에요'); closeModal(); loadMeetingsFromServer(); } else showToast('삭제 실패: '+(err&&err.message||err)); }); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
     else if(a==='del-c'){ if(b.dataset.armed){ state.clients=state.clients.filter(x=>x.id!==id); closeModal(); render(); showToast('거래처를 삭제했어요'); } else { b.dataset.armed='1'; b.textContent='한 번 더 누르면 삭제'; b.classList.add('danger'); } }
     else if(a==='orgf'){ orgFilter=b.dataset.org; render(); }
