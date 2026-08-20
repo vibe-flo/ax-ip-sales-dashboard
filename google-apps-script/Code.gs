@@ -30,8 +30,16 @@ function checkToken_(token){
   return !!expected && token===expected;
 }
 // Google ID 토큰(idToken)을 Google의 tokeninfo 엔드포인트로 검증하고, 화이트리스트 이메일인지 확인.
+// tokeninfo는 구글이 "디버깅용, 프로덕션 트래픽 부적합"이라 명시한 엔드포인트라 매 요청마다 부르면
+// 레이트리밋/일시 오류로 튕길 수 있음 — 같은 토큰은 CacheService에 결과를 캐싱해 재검증을 건너뜀.
 function verifyIdentity_(idToken){
   if(!idToken) return {ok:false, code:'unauthenticated'};
+  const cache=CacheService.getScriptCache();
+  const cacheKey='idtok_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, idToken));
+  const cached=cache.get(cacheKey);
+  if(cached){
+    try{ return JSON.parse(cached); }catch(err){ /* 캐시 손상 시 재검증으로 진행 */ }
+  }
   let resp;
   try{
     resp=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(idToken), {muteHttpExceptions:true});
@@ -44,8 +52,12 @@ function verifyIdentity_(idToken){
   if(info.aud!==GOOGLE_CLIENT_ID) return {ok:false, code:'unauthenticated'};
   if(info.email_verified!=='true' && info.email_verified!==true) return {ok:false, code:'unauthenticated'};
   const email=String(info.email||'').trim().toLowerCase();
-  if(!ALLOWED_EMAILS.has(email)) return {ok:false, code:'forbidden', email};
-  return {ok:true, email};
+  const result=ALLOWED_EMAILS.has(email) ? {ok:true, email} : {ok:false, code:'forbidden', email};
+  // 검증 결과(성공/거부 모두)만 캐싱. 네트워크·파싱 오류는 캐싱하지 않아 재시도가 항상 새로 검증되게 함.
+  const exp=Number(info.exp||0);
+  const ttl=Math.max(60, Math.min(exp?Math.floor(exp-Date.now()/1000):300, 3600));
+  cache.put(cacheKey, JSON.stringify(result), ttl);
+  return result;
 }
 function jsonOut_(obj){
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
