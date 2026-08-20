@@ -19,17 +19,14 @@ function withLock_(fn){
   lock.waitLock(10000);
   try{ return fn(); } finally { lock.releaseLock(); }
 }
-function toDateObj_(iso){
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso||'')) return null;
-  return new Date(iso+'T00:00:00');
+function isoToDot_(iso){
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso||'') ? iso.replace(/-/g,'.') : '';
 }
-function computeWeekDate_(iso){
-  const d=toDateObj_(iso);
-  if(!d) return null;
-  const off=(d.getDay()+6)%7;
-  const w=new Date(d);
-  w.setDate(w.getDate()-off);
-  return w;
+function todayDotKST_(){
+  return Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy.MM.dd');
+}
+function setDotDate_(range, dotStr){
+  range.setNumberFormat('@').setValue(dotStr||'');
 }
 function dateCellToISO_(v){
   if(v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -68,9 +65,12 @@ function listMeetings_(){
 function createMeeting_(data){
   const sheet=getSheet_();
   const id=Utilities.getUuid();
-  const mdate=toDateObj_(data.mdateISO);
-  sheet.appendRow(['', data.div||'', data.client||'', data.artist||'', mdate||'', data.cp||'', data.status||'', data.log||'', data.followup||'', id]);
-  return rowToMeeting_(sheet, findRowById_(sheet, id));
+  const regDate=todayDotKST_(), mdateStr=isoToDot_(data.mdateISO);
+  sheet.appendRow([regDate, data.div||'', data.client||'', data.artist||'', mdateStr, data.cp||'', data.status||'', data.log||'', data.followup||'', id]);
+  const row=findRowById_(sheet, id);
+  setDotDate_(sheet.getRange(row,COLS.date), regDate);
+  setDotDate_(sheet.getRange(row,COLS.mdate), mdateStr);
+  return rowToMeeting_(sheet, row);
 }
 function updateMeeting_(id,data){
   const sheet=getSheet_();
@@ -84,7 +84,7 @@ function updateMeeting_(id,data){
   if(has('log')) sheet.getRange(row,COLS.log).setValue(data.log||'');
   if(has('followup')) sheet.getRange(row,COLS.followup).setValue(data.followup||'');
   if(has('mdateISO') && data.mdateISO){
-    sheet.getRange(row,COLS.mdate).setValue(toDateObj_(data.mdateISO)||'');
+    setDotDate_(sheet.getRange(row,COLS.mdate), isoToDot_(data.mdateISO));
   }
   return rowToMeeting_(sheet,row);
 }
