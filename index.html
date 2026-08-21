@@ -15761,6 +15761,9 @@
   const GOOGLE_CLIENT_ID='331750263105-khe113rrlgrfr0tmfm9ik9un8gib7nd6.apps.googleusercontent.com';
   const AUTH_KEY='ipdash_google_id_token';
   let authIdToken=null;
+  let refreshTimer_=null;
+  let pendingRefresh_=null;
+  let resolveRefresh_=null;
   function decodeJwt_(token){
     try{
       const part=token.split('.')[1];
@@ -15770,15 +15773,15 @@
   }
   function loadStoredToken_(){
     try{
-      const raw=sessionStorage.getItem(AUTH_KEY);
+      const raw=localStorage.getItem(AUTH_KEY);
       if(!raw) return null;
       const payload=decodeJwt_(raw);
-      if(!payload||!payload.exp||Date.now()>=payload.exp*1000){ sessionStorage.removeItem(AUTH_KEY); return null; }
+      if(!payload||!payload.exp||Date.now()>=payload.exp*1000){ localStorage.removeItem(AUTH_KEY); return null; }
       return {idToken:raw, payload};
     }catch(_){ return null; }
   }
-  function storeToken_(idToken){ try{ sessionStorage.setItem(AUTH_KEY, idToken); }catch(_){} }
-  function clearToken_(){ try{ sessionStorage.removeItem(AUTH_KEY); }catch(_){} }
+  function storeToken_(idToken){ try{ localStorage.setItem(AUTH_KEY, idToken); }catch(_){} }
+  function clearToken_(){ try{ localStorage.removeItem(AUTH_KEY); }catch(_){} }
   function showApp_(){ $('#authGate').style.display='none'; $('#appWrap').style.display=''; }
   function showGate_(forbidden){
     $('#appWrap').style.display='none';
@@ -15794,7 +15797,33 @@
     el.innerHTML='';
     google.accounts.id.renderButton(el, {theme:'outline', size:'large', text:'signin_with', shape:'pill'});
   }
+  function stopRefresh_(){
+    if(refreshTimer_){ clearTimeout(refreshTimer_); refreshTimer_=null; }
+    if(resolveRefresh_){ resolveRefresh_(false); resolveRefresh_=null; pendingRefresh_=null; }
+  }
+  // 만료 5분 전에 조용히(silent) 새 ID 토큰을 받아 브라우저의 구글 세션이 살아있는 한 재로그인 화면 없이 세션을 이어간다.
+  function scheduleRefresh_(payload){
+    if(refreshTimer_){ clearTimeout(refreshTimer_); refreshTimer_=null; }
+    if(!payload||!payload.exp) return;
+    const msUntil=Math.max(0, payload.exp*1000 - Date.now() - 5*60*1000);
+    refreshTimer_=setTimeout(()=>{ attemptSilentRefresh_(); }, msUntil);
+  }
+  function attemptSilentRefresh_(){
+    if(!window.google||!google.accounts||!google.accounts.id) return Promise.resolve(false);
+    if(pendingRefresh_) return pendingRefresh_;
+    pendingRefresh_=new Promise(resolve=>{
+      let settled=false;
+      resolveRefresh_=ok=>{ if(settled) return; settled=true; resolveRefresh_=null; pendingRefresh_=null; resolve(ok); };
+      google.accounts.id.prompt(notification=>{
+        const failed=(notification.isNotDisplayed&&notification.isNotDisplayed())||(notification.isSkippedMoment&&notification.isSkippedMoment());
+        if(failed && resolveRefresh_) resolveRefresh_(false);
+      });
+      setTimeout(()=>{ if(resolveRefresh_) resolveRefresh_(false); }, 4000);
+    });
+    return pendingRefresh_;
+  }
   function signOut_(){
+    stopRefresh_();
     clearToken_(); authIdToken=null;
     if(window.google&&google.accounts&&google.accounts.id) google.accounts.id.disableAutoSelect();
     updateUserBadge_(null);
@@ -15807,11 +15836,19 @@
     authIdToken=idToken; storeToken_(idToken);
     updateUserBadge_(payload);
     showApp_();
+    scheduleRefresh_(payload);
+    if(resolveRefresh_) resolveRefresh_(true);
     loadMeetingsFromServer();
   }
-  function handleAuthError_(err){
-    if(err==='forbidden'){ clearToken_(); authIdToken=null; updateUserBadge_(null); showGate_(true); }
-    else if(err==='unauthenticated'){ clearToken_(); authIdToken=null; updateUserBadge_(null); showGate_(false); initGsiButton_(); }
+  async function recoverFromUnauthenticated_(){
+    const ok=await attemptSilentRefresh_();
+    if(!ok){ stopRefresh_(); clearToken_(); authIdToken=null; updateUserBadge_(null); showGate_(false); initGsiButton_(); }
+    return ok;
+  }
+  async function handleAuthError_(err){
+    if(err==='forbidden'){ stopRefresh_(); clearToken_(); authIdToken=null; updateUserBadge_(null); showGate_(true); return false; }
+    if(err==='unauthenticated') return recoverFromUnauthenticated_();
+    return false;
   }
   function initAuth_(){
     if(!window.google||!google.accounts||!google.accounts.id){ setTimeout(initAuth_, 150); return; }
@@ -15822,27 +15859,43 @@
       authIdToken=stored.idToken;
       updateUserBadge_(stored.payload);
       showApp_();
+      scheduleRefresh_(stored.payload);
       loadMeetingsFromServer();
     } else {
       initGsiButton_();
       google.accounts.id.prompt();
     }
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState!=='visible'||!authIdToken) return;
+      const payload=decodeJwt_(authIdToken);
+      if(payload&&payload.exp&&payload.exp*1000-Date.now()<5*60*1000) attemptSilentRefresh_();
+    });
   }
 
-  async function apiList(){
+  async function fetchList_(){
     const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
     let res; try{ res=await fetch(`${SHEETS_API_URL}?action=list&token=${encodeURIComponent(SHEETS_API_TOKEN)}&idToken=${encodeURIComponent(authIdToken||'')}`, {signal:ctrl.signal}); } finally { clearTimeout(to); }
     const t=await res.text();
     let j; try{ j=JSON.parse(t); }catch(_){ throw new Error('server_error'); }
-    if(!j.ok){ handleAuthError_(j.error); throw new Error(j.error||'list_failed'); }
+    return j;
+  }
+  async function apiList(){
+    let j=await fetchList_();
+    if(!j.ok){ if(await handleAuthError_(j.error)) j=await fetchList_(); }
+    if(!j.ok) throw new Error(j.error||'list_failed');
     return j.meetings;
   }
-  async function apiPost(body){
+  async function fetchPost_(body){
     const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),15000);
     let res; try{ res=await fetch(SHEETS_API_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(Object.assign({token:SHEETS_API_TOKEN, idToken:authIdToken||''}, body)), signal:ctrl.signal }); } finally { clearTimeout(to); }
     const t=await res.text();
     let j; try{ j=JSON.parse(t); }catch(_){ throw new Error('server_error'); }
-    if(!j.ok){ handleAuthError_(j.error); throw new Error(j.error||'request_failed'); }
+    return j;
+  }
+  async function apiPost(body){
+    let j=await fetchPost_(body);
+    if(!j.ok){ if(await handleAuthError_(j.error)) j=await fetchPost_(body); }
+    if(!j.ok) throw new Error(j.error||'request_failed');
     return j;
   }
   const apiCreate=data=>apiPost({action:'create',data});
