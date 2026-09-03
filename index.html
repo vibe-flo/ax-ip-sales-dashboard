@@ -327,8 +327,8 @@
   select{ appearance:none; -webkit-appearance:none; padding-right:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238E8E93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; }
   input[type=checkbox]{ width:16px; height:16px; accent-color:var(--accent); margin:0; flex-shrink:0; touch-action:manipulation; }
   input:focus-visible,select:focus-visible,textarea:focus-visible{ border-color:var(--accent); box-shadow:0 0 0 3px var(--ring); }
-  input[type=date]{ color-scheme:light; -webkit-appearance:none; appearance:none; min-width:0; min-inline-size:0; width:100%; display:block; text-align:left; }
-  input[type=date]::-webkit-date-and-time-value{ text-align:left; min-height:1.3em; }
+  input[type=date]{ color-scheme:light; -webkit-appearance:none; appearance:none; min-width:0; min-inline-size:0; width:100%; display:flex; align-items:center; text-align:left; }
+  input[type=date]::-webkit-date-and-time-value{ text-align:left; }
   .chips{ display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
   .search{ min-width:160px; }
   .chip{ font-family:inherit; font-size:12px; font-weight:600; height:30px; padding:0 12px; border-radius:var(--flo-radius-circle); border:1px solid var(--border); background:var(--card); color:var(--ink-2); cursor:pointer; display:inline-flex; align-items:center; white-space:nowrap; touch-action:manipulation; transition:var(--tr); }
@@ -493,7 +493,7 @@
   .modal-bg{ position:fixed; inset:0; background:var(--overlay); display:flex; align-items:flex-start; justify-content:center; padding:44px 16px; z-index:50; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; } .modal-bg[hidden]{ display:none; }
   .modal{ background:var(--card); border:1px solid var(--border); border-radius:var(--flo-radius-16); width:100%; max-width:480px; box-shadow:0 24px 70px rgba(30,40,70,.22); }
   .modal-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 22px 14px; border-bottom:1px solid var(--border); flex:0 0 auto; } .modal-head b{ min-width:0; overflow-wrap:anywhere; }
-  .modal-body{ padding:18px 22px 22px; } .field{ margin-bottom:13px; min-width:0; } .field:last-child{ margin-bottom:0; } .field>label,.field>.lb{ display:block; font-size:var(--font-size-100); line-height:var(--font-line-height-100); font-weight:var(--font-weight-semibold); color:var(--ink-2); margin-bottom:6px; }
+  .modal-body{ padding:18px 22px 22px; } .field{ margin-bottom:13px; min-width:0; } .field:last-child{ margin-bottom:0; } .field>label:not(.check),.field>.lb{ display:block; font-size:var(--font-size-100); line-height:var(--font-line-height-100); font-weight:var(--font-weight-semibold); color:var(--ink-2); margin-bottom:6px; }
   .field input[type=text],.field input[type=date],.field select,.field textarea{ width:100%; } .field textarea{ min-height:88px; resize:vertical; line-height:1.5; }
   .two{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; } .two.solo{ grid-template-columns:minmax(0,1fr); } .check{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink); cursor:pointer; touch-action:manipulation; } .check input{ width:16px; height:16px; accent-color:var(--accent); }
   .bmchecks{ display:flex; flex-wrap:wrap; gap:6px 12px; padding-top:2px; } .bmck{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ink); cursor:pointer; touch-action:manipulation; } .bmck input{ width:16px; height:16px; accent-color:var(--accent); }
@@ -560,9 +560,9 @@
     .wfr,.wr2,.prow-r{ flex-shrink:1; }
     .cal-grid{ gap:3px; } .cal-cell{ min-height:54px; padding:3px; gap:2px; } .cal-ev{ font-size:9px; padding:1px 3px; } .cal-d{ font-size:10px; }
     .cal-nav b{ min-width:84px; font-size:13px; }
-    /* 모달: 키보드/스크롤에 저장 버튼이 가리지 않도록 */
-    .modal-bg{ padding:calc(12px + env(safe-area-inset-top, 0px)) 10px calc(12px + env(safe-area-inset-bottom, 0px)); min-height:100dvh; }
-    .modal{ max-height:calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); display:flex; flex-direction:column; }
+    /* 모달: 키보드/스크롤에 저장 버튼이 가리지 않도록. --vvh는 visualViewport 높이(키보드 열림 반영), JS가 없으면 100dvh로 폴백 */
+    .modal-bg{ padding:calc(12px + env(safe-area-inset-top, 0px)) 10px calc(12px + env(safe-area-inset-bottom, 0px)); min-height:var(--vvh, 100dvh); }
+    .modal{ max-height:calc(var(--vvh, 100dvh) - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); display:flex; flex-direction:column; }
     .modal-body{ overflow-y:auto; -webkit-overflow-scrolling:touch; flex:1 1 auto; min-height:0; }
     .modal-foot{ position:sticky; bottom:0; z-index:1; background:var(--card); padding-top:12px; padding-bottom:12px; margin-bottom:-22px; }
     .toast{ bottom:calc(16px + env(safe-area-inset-bottom, 0px)); }
@@ -16452,10 +16452,22 @@
   function shiftMonth(delta){ let [y,m]=calMonth.split('-').map(Number); m+=delta; if(m<1){m=12;y--} if(m>12){m=1;y++} calMonth=y+'-'+String(m).padStart(2,'0'); renderCal(); }
 
   const modal=$('#modal'), mBody=$('#modal-body'), mTitle=$('#modal-title');
-  function openModal(t,h){ mTitle.textContent=t; mBody.innerHTML=h; modal.hidden=false;
+  let scrollLockY=0;
+  function lockBodyScroll(){
+    if(document.body.style.position==='fixed') return;
+    scrollLockY=window.scrollY||document.documentElement.scrollTop||0;
+    document.body.style.position='fixed'; document.body.style.top=(-scrollLockY)+'px';
+    document.body.style.left='0'; document.body.style.right='0'; document.body.style.width='100%';
+  }
+  function unlockBodyScroll(){
+    if(document.body.style.position!=='fixed') return;
+    document.body.style.position=''; document.body.style.top=''; document.body.style.left=''; document.body.style.right=''; document.body.style.width='';
+    window.scrollTo(0,scrollLockY);
+  }
+  function openModal(t,h){ mTitle.textContent=t; mBody.innerHTML=h; modal.hidden=false; lockBodyScroll();
     if(window.matchMedia&&window.matchMedia('(pointer:coarse)').matches) return;
     const f=mBody.querySelector('input:not([type=hidden]),select,textarea'); if(f) f.focus(); }
-  function closeModal(){ modal.hidden=true; mBody.innerHTML=''; }
+  function closeModal(){ modal.hidden=true; mBody.innerHTML=''; unlockBodyScroll(); }
   const opts=(arr,cur)=>arr.map(o=>`<option${o===cur?' selected':''}>${esc(o)}</option>`).join('');
 
   function mForm(m){ m=m||{id:'',week:state.week,org:'드림어스',div:'팬덤사업부',client:'',artist:'',mdate:'',status:'제안',log:'',followup:'',cp:''};
@@ -16595,6 +16607,23 @@
   (function(){ const bar=document.querySelector('.bar'); if(!bar) return;
     const set=()=>{ const h=bar.offsetHeight; if(h>0) document.documentElement.style.setProperty('--bar-h',h+'px'); };
     set(); if(window.ResizeObserver) new ResizeObserver(set).observe(bar); else window.addEventListener('resize',set);
+  })();
+
+  (function(){
+    // iOS Safari 키보드가 열려도 모달 높이(--vvh)가 실제 보이는 영역을 따라가도록,
+    // 포커스된 필드가 sticky 저장바에 가리면 스크롤로 끌어올린다.
+    const scrollFocusedIntoView=()=>{
+      const el=document.activeElement;
+      if(el&&!modal.hidden&&mBody.contains(el)&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)){
+        el.scrollIntoView({block:'center',behavior:'smooth'});
+      }
+    };
+    if(window.visualViewport){
+      const setVVH=()=>{ document.documentElement.style.setProperty('--vvh',window.visualViewport.height+'px'); scrollFocusedIntoView(); };
+      setVVH();
+      window.visualViewport.addEventListener('resize',setVVH);
+    }
+    mBody.addEventListener('focusin',e=>{ if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) setTimeout(scrollFocusedIntoView,350); });
   })();
 
   render();
