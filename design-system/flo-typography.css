@@ -1,0 +1,82 @@
+/* flo-typography.css — FLO 타이포그래피(AOS 토큰 기준). 손으로 관리(빌드 파이프라인 아님).
+   출처: FLO 디자인 시스템 AOS Font Tokens / Style 가이드.
+   flo-theme-tokens.css(컬러·radius·spacing)와 함께 로드해서 쓴다. */
+
+/* ── A. Pretendard 로드 ──
+   기본은 CDN(variable dynamic subset, 용량 최적):
+   @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
+
+   이 프로젝트(ax-ip-sales-dashboard)는 사내망 CDN 차단 리스크 때문에 자체 호스팅으로
+   전환했다. index.html 에는 위 @import 대신 fonts/PretendardVariable-subset.woff2 를
+   base64 인라인한 @font-face 가 들어있다(wght 400-700, 완성형 한글 전체 + 라틴/기호,
+   약 1.1MB). 재생성 방법은 fonts/build-subset.sh 참고. 새 프로젝트에 이 파일을 복사해
+   쓸 때는 사내망 제약이 없다면 위 CDN @import 로 되돌리는 쪽이 더 가볍다. */
+
+:root {
+  /* Font family */
+  --font-sans: "Pretendard Variable", Pretendard, ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", "Apple SD Gothic Neo", Arial,
+    "Noto Sans KR", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* ── Font Size 토큰 (px) ── */
+  --font-size-900: 40px;
+  --font-size-800: 32px;
+  --font-size-700: 28px;
+  --font-size-600: 24px;
+  --font-size-500: 20px;
+  --font-size-400: 18px;
+  --font-size-300: 16px;
+  --font-size-200: 14px;
+  --font-size-100: 12px;
+  --font-size-50: 10px;
+
+  /* ── Font Line Height 토큰 (px) ── */
+  --font-line-height-900: 48px;
+  --font-line-height-800: 40px;
+  --font-line-height-700: 36px;
+  --font-line-height-600: 32px;
+  --font-line-height-500: 28px;
+  --font-line-height-400: 24px;
+  --font-line-height-300: 22px;
+  --font-line-height-200: 20px;
+  --font-line-height-100: 18px;
+  --font-line-height-50: 12px;
+
+  /* ── Font Weight 토큰 ── */
+  --font-weight-bold: 700;
+  --font-weight-semibold: 600;
+  --font-weight-medium: 500;
+  --font-weight-regular: 400;
+
+  /* ── Text Decoration 토큰 ── */
+  --text-decoration-underline: underline;
+}
+
+/* ── C. FLO 스타일명 유틸리티 클래스 (AOS Style 가이드 1:1) ──
+   className="flo-body1" 처럼 바로 사용. size/line-height/weight/decoration을 한 번에 적용. */
+
+/* Headings */
+.flo-h50  { font-size: var(--font-size-900); line-height: var(--font-line-height-900); font-weight: var(--font-weight-bold); }      /* 40 / 48 / bold */
+.flo-h100 { font-size: var(--font-size-700); line-height: var(--font-line-height-700); font-weight: var(--font-weight-bold); }      /* 28 / 36 / bold */
+.flo-h200 { font-size: var(--font-size-600); line-height: var(--font-line-height-600); font-weight: var(--font-weight-bold); }      /* 24 / 32 / bold */
+.flo-h300 { font-size: var(--font-size-500); line-height: var(--font-line-height-500); font-weight: var(--font-weight-bold); }      /* 20 / 28 / bold */
+.flo-h400 { font-size: var(--font-size-400); line-height: var(--font-line-height-400); font-weight: var(--font-weight-semibold); }  /* 18 / 24 / semibold */
+
+/* Body */
+.flo-body1          { font-size: var(--font-size-300); line-height: var(--font-line-height-300); font-weight: var(--font-weight-regular); }   /* 16 / 22 / regular  ← Default */
+.flo-body1-strong   { font-size: var(--font-size-300); line-height: var(--font-line-height-300); font-weight: var(--font-weight-semibold); }  /* 16 / 22 / semibold */
+.flo-body2          { font-size: var(--font-size-200); line-height: var(--font-line-height-200); font-weight: var(--font-weight-regular); }   /* 14 / 20 / regular */
+.flo-body2-strong   { font-size: var(--font-size-200); line-height: var(--font-line-height-200); font-weight: var(--font-weight-semibold); }  /* 14 / 20 / semibold */
+.flo-body2-underline{ font-size: var(--font-size-200); line-height: var(--font-line-height-200); font-weight: var(--font-weight-regular); text-decoration: var(--text-decoration-underline); } /* 14 / 20 / regular / underline */
+.flo-body3          { font-size: var(--font-size-200); line-height: var(--font-line-height-200); font-weight: var(--font-weight-regular); }   /* 14 / 20 / regular */
+.flo-body3-strong   { font-size: var(--font-size-200); line-height: var(--font-line-height-200); font-weight: var(--font-weight-semibold); }  /* 14 / 20 / semibold */
+
+/* Caption */
+.flo-caption1          { font-size: var(--font-size-100); line-height: var(--font-line-height-100); font-weight: var(--font-weight-medium); }   /* 12 / 18 / medium */
+.flo-caption1-strong   { font-size: var(--font-size-100); line-height: var(--font-line-height-100); font-weight: var(--font-weight-semibold); } /* 12 / 18 / semibold */
+.flo-caption1-underline{ font-size: var(--font-size-100); line-height: var(--font-line-height-100); font-weight: var(--font-weight-medium); text-decoration: var(--text-decoration-underline); } /* 12 / 18 / medium / underline */
+.flo-caption2          { font-size: var(--font-size-50);  line-height: var(--font-line-height-50);  font-weight: var(--font-weight-medium); }   /* 10 / 12 / medium */
+.flo-caption2-strong   { font-size: var(--font-size-50);  line-height: var(--font-line-height-50);  font-weight: var(--font-weight-semibold); } /* 10 / 12 / semibold */
+
+/* body1 은 앱 기본 본문. 내부 툴은 정보 밀도 우선이라 body2(14px)를 기본 본문으로 권장. */
