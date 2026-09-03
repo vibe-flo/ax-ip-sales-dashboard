@@ -3,7 +3,7 @@
 
 ## 배포
 
-`main` 브랜치 push → GitHub Actions(S3 AutoSync)가 `index.html`을 `s3://flo-vibe/prod/ax-ip-sales-dashboard/`로 동기화 → `https://vibe.music-flo.com/ax-ip-sales-dashboard`로 서빙(nginx 게이트웨이).
+`main` 브랜치 push → GitHub Actions(S3 AutoSync)가 `index.html`을 `s3://flo-vibe/prod/ax-ip-sales-dashboard/`로 동기화 → `https://foundry.music-flo.com/ax-ip-sales-dashboard`로 서빙(nginx 게이트웨이). S3 버킷명(`flo-vibe`)은 게이트웨이 도메인이 `vibe.music-flo.com`에서 `foundry.music-flo.com`으로 바뀐 뒤에도 그대로다(레거시 이름).
 
 ## 접근 제어
 

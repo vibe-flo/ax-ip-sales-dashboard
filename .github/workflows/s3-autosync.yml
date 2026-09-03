@@ -1,5 +1,5 @@
 name: S3 AutoSync
-# AWS 외부망 배포 — flo-vibe 버킷 + vibe.music-flo.com 게이트웨이.
+# AWS 외부망 배포 — flo-vibe 버킷 + foundry.music-flo.com 게이트웨이(구 vibe.music-flo.com).
 # 순수 정적 index.html 1개 파일이라 npm 빌드 없이 그대로 S3에 올린다.
 on:
   push:
